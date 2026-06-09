@@ -17,11 +17,8 @@ Port = 9000
 *Note: Kindly avoid using Educational version of Tally Prime, which has limitations of date range. It will result in invalid / partial data being fed to LLM, leading to highly degraded &amp; incorrect responses.*
 
 ## Download
-Avoid cloning repository directly. Utility is available for download (with required dependencies) on below link <br>
-[https://excelkida.com/resource/tally-mcp-server-v7.3.zip](https://excelkida.com/resource/tally-mcp-server-v7.3.zip)
-
-One-click installer **extension** for **Claude Desktop**<br>
-[https://excelkida.com/resource/tally-mcp-server-v7.3.mcpb](https://excelkida.com/resource/tally-mcp-server-v7.3.mcpb)
+Download the latest release from GitHub: <br>
+[https://github.com/QalaLabs/tally-mcp-server/releases](https://github.com/QalaLabs/tally-mcp-server/releases)
 
 Last updated: version **7.3** [31-May-2026]
 
@@ -418,7 +415,7 @@ Sets active reporting period context in Tally Prime.
 JSON string: `"OK"` on success.
 
 ## Contact
-Project developed & maintained by: **Dhananjay Gokhale**
+Project developed & maintained by: **Qala Labs**
 
-Email: **info@excelkida.com** <br>
-Whatsapp: **(+91) 90284-63366**
+Email: **hello@qalalabs.com** <br>
+GitHub: [https://github.com/QalaLabs](https://github.com/QalaLabs)

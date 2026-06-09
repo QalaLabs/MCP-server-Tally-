@@ -5,18 +5,20 @@
   "type": "module",
   "main": "dist/server.mjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node dist/server.mjs",
+    "start:local": "node dist/index.mjs"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dhananjay1405/tally-mcp-server.git"
+    "url": "git+https://github.com/QalaLabs/tally-mcp-server.git"
   },
-  "author": "",
+  "author": "Qala Labs",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/dhananjay1405/tally-mcp-server/issues"
+    "url": "https://github.com/QalaLabs/tally-mcp-server/issues"
   },
-  "homepage": "https://github.com/dhananjay1405/tally-mcp-server#readme",
+  "homepage": "https://github.com/QalaLabs/tally-mcp-server#readme",
   "dependencies": {
     "@electric-sql/pglite": "^0.4.5",
     "@modelcontextprotocol/sdk": "^1.29.0",

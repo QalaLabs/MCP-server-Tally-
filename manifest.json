@@ -5,16 +5,16 @@
   "version": "7.3.0",
   "description": "Expose Tally Prime ERP data to MCP-compatible clients like Claude Desktop.",
   "author": {
-    "name": "Dhananjay Gokhale",
-    "email": "info@excelkida.com",
-    "url": "https://github.com/dhananjay1405"
+    "name": "Qala Labs",
+    "email": "hello@qalalabs.com",
+    "url": "https://github.com/QalaLabs"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/dhananjay1405/tally-mcp-server.git"
+    "url": "https://github.com/QalaLabs/tally-mcp-server.git"
   },
-  "homepage": "https://github.com/dhananjay1405/tally-mcp-server#readme",
-  "support": "https://github.com/dhananjay1405/tally-mcp-server#readme",
+  "homepage": "https://github.com/QalaLabs/tally-mcp-server#readme",
+  "support": "https://github.com/QalaLabs/tally-mcp-server#readme",
   "license": "ISC",
   "server": {
     "type": "node",
