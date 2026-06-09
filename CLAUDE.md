@@ -35,7 +35,7 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
 3. Enter: `http://localhost:3000` (or your server domain)
 4. Password: `S6MMXo0d0-XUXb3SSMaR7A`
 
-## Available Tools (23)
+## Available Tools (24)
 
 ### Tally Prime Tools (19)
 - `metadata-collection` — List collections
@@ -58,11 +58,16 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
 - `set-company` — Switch Tally company
 - `set-period` — Set reporting period
 
-### Odoo Integration Tools (4)
-- `odoo-sync-masters` — Sync customers/vendors from Odoo
-- `odoo-sync-sales` — Sync sales invoices & credit notes
-- `odoo-sync-purchase` — Sync purchase bills & returns
-- `odoo-sync-journals` — Sync journal entries
+### Odoo Integration Tools (5)
+- `sync_ledgers` — Sync customers/vendors from Odoo to Tally
+- `push_voucher_draft` — Stage sales/purchase/journal as DRAFT vouchers (ISACCEPTED=No)
+- `reconcile_gst` — Compare Odoo GST vs Tally GST for a period
+- `fetch_daybook` — Fetch day-book (voucher register) from Tally
+- `trial-balance` — Pull trial balance (reuses existing Tally tool)
+
+## Draft Voucher Gate
+
+ALL vouchers are created with `ISACCEPTED=No`. Finance team must accept them in Tally before they appear in reports. Zero auto-acceptance.
 
 ## Odoo Configuration
 

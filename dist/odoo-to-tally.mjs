@@ -200,6 +200,7 @@ export function buildSalesVoucher(invoice, lines) {
             <PARTYLEDGERNAME>${esc(partnerName)}</PARTYLEDGERNAME>
             <EFFECTIVEDATE>${date}</EFFECTIVEDATE>
             <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+            <ISACCEPTED>No</ISACCEPTED>
             <NARRATION>${esc(narration)}</NARRATION>
             <ALLLEDGERENTRIES.LIST>
 ${entriesXml}            </ALLLEDGERENTRIES.LIST>
@@ -249,6 +250,7 @@ export function buildPurchaseVoucher(invoice, lines) {
             <DIFFACTUALQTY>No</DIFFACTUALQTY>
             <ISDELETED>No</ISDELETED>
             <ASORIGINALVCH>No</ASORIGINALVCH>
+            <ISACCEPTED>No</ISACCEPTED>
             <ALLLEDGERENTRIES.LIST>
 ${entriesXml}            </ALLLEDGERENTRIES.LIST>
           </VOUCHER>
@@ -325,6 +327,7 @@ export function buildJournalVoucher(entry, items) {
             <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
             <VOUCHERNUMBER>${esc(ref)}</VOUCHERNUMBER>
             <DATE>${date}</DATE>
+            <ISACCEPTED>No</ISACCEPTED>
             <NARRATION>${esc(narration)}</NARRATION>
             <ALLLEDGERENTRIES.LIST>
 ${entriesXml}            </ALLLEDGERENTRIES.LIST>

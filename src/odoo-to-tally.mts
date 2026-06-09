@@ -222,6 +222,7 @@ export function buildSalesVoucher(invoice: odoo.OdooInvoice, lines: odoo.OdooInv
             <PARTYLEDGERNAME>${esc(partnerName)}</PARTYLEDGERNAME>
             <EFFECTIVEDATE>${date}</EFFECTIVEDATE>
             <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+            <ISACCEPTED>No</ISACCEPTED>
             <NARRATION>${esc(narration)}</NARRATION>
             <ALLLEDGERENTRIES.LIST>
 ${entriesXml}            </ALLLEDGERENTRIES.LIST>
@@ -275,6 +276,7 @@ export function buildPurchaseVoucher(invoice: odoo.OdooInvoice, lines: odoo.Odoo
             <DIFFACTUALQTY>No</DIFFACTUALQTY>
             <ISDELETED>No</ISDELETED>
             <ASORIGINALVCH>No</ASORIGINALVCH>
+            <ISACCEPTED>No</ISACCEPTED>
             <ALLLEDGERENTRIES.LIST>
 ${entriesXml}            </ALLLEDGERENTRIES.LIST>
           </VOUCHER>
@@ -363,6 +365,7 @@ export function buildJournalVoucher(entry: odoo.OdooJournalEntry, items: odoo.Od
             <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
             <VOUCHERNUMBER>${esc(ref)}</VOUCHERNUMBER>
             <DATE>${date}</DATE>
+            <ISACCEPTED>No</ISACCEPTED>
             <NARRATION>${esc(narration)}</NARRATION>
             <ALLLEDGERENTRIES.LIST>
 ${entriesXml}            </ALLLEDGERENTRIES.LIST>
