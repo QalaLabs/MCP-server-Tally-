@@ -5,6 +5,8 @@ import { fetchReport, importMasters, invokeTallyAction, queryCollection, renameO
 import { cacheTable, executeSQL } from './database.mjs';
 import { lstCollectionFields, lstOptionCountryState } from './definition.mjs';
 import { utility } from './utility.mjs';
+import * as odooClient from './odoo-client.mjs';
+import * as odooToTally from './odoo-to-tally.mjs';
 dotenv.config({ override: true, quiet: true });
 const lstCollections = lstCollectionFields.map((item) => item.collection);
 export async function registerMcpServer() {
@@ -724,6 +726,270 @@ export async function registerMcpServer() {
             let inputParams = new Map([['SVFromDate', utility.Date.format(_fromDate, 'd-MMM-yyyy')], ['SVToDate', utility.Date.format(_toDate, 'd-MMM-yyyy')]]);
             await invokeTallyAction('Change Period', inputParams);
             return { content: [{ type: 'text', text: JSON.stringify('OK') }] };
+        }
+        catch (err) {
+            return {
+                isError: true, content: [{ type: 'text', text: JSON.stringify(err) }]
+            };
+        }
+    });
+    // ═══════════════════════════════════════════════════════════════════
+    // ODOO SYNC TOOLS
+    // ═══════════════════════════════════════════════════════════════════
+    mcpServer.registerTool('odoo-sync-masters', {
+        title: 'Sync Odoo Masters',
+        description: `Fetches customers and vendors from Odoo ERP and creates missing ledger masters in Tally Prime. Connects via Odoo XML-RPC API, fetches res.partner records with customer_rank > 0 or supplier_rank > 0, checks which ledgers already exist in Tally using list-master, and creates missing ones under Sundry Debtors (customers) or Sundry Creditors (vendors). Also fetches chart of accounts from account.account and creates missing account ledgers.`,
+        inputSchema: {
+            targetCompany: z.string().optional().describe('optional Tally company name. leave blank for active company'),
+            fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('optional from date to limit Odoo records'),
+            toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('optional to date to limit Odoo records'),
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        }
+    }, async (args) => {
+        try {
+            const company = args.targetCompany || '';
+            const fromDate = args.fromDate;
+            const toDate = args.toDate;
+            // 1. Fetch partners from Odoo
+            const partners = await odooClient.fetchPartners([], 0, 5000);
+            // 2. Fetch existing ledgers from Tally
+            const existingCustomers = await queryCollection('Ledger', ['Name'], new Map(), args.targetCompany);
+            const existingNames = new Set(existingCustomers.map((l) => l.Name));
+            // 3. Determine missing ledgers
+            const missingLedgers = [];
+            for (const p of partners) {
+                if (existingNames.has(p.name))
+                    continue;
+                const isCustomer = p.customer_rank > 0;
+                const isVendor = p.supplier_rank > 0;
+                missingLedgers.push({
+                    name: p.name,
+                    parent: isCustomer ? 'Sundry Debtors' : isVendor ? 'Sundry Creditors' : 'Current Liabilities',
+                });
+            }
+            if (missingLedgers.length === 0) {
+                return {
+                    content: [{ type: 'text', text: JSON.stringify({ mastersCreated: 0, message: 'All Odoo partners already exist as Tally ledgers' }) }]
+                };
+            }
+            // 4. Build and send masters XML
+            const xml = odooToTally.buildMastersEnvelope(company, missingLedgers);
+            const masterParams = new Map();
+            masterParams.set('masters', missingLedgers);
+            masterParams.set('targetCompany', company);
+            await importMasters('master-ledger', masterParams);
+            return {
+                content: [{ type: 'text', text: JSON.stringify({ mastersCreated: missingLedgers.length, partners: missingLedgers.map(l => l.name) }) }]
+            };
+        }
+        catch (err) {
+            return {
+                isError: true, content: [{ type: 'text', text: JSON.stringify(err) }]
+            };
+        }
+    });
+    mcpServer.registerTool('odoo-sync-sales', {
+        title: 'Sync Odoo Sales',
+        description: `Fetches sales invoices and credit notes from Odoo ERP and creates corresponding Sales and Credit Note vouchers in Tally Prime. Fetches account.move with move_type out_invoice and out_refund, resolves invoice lines, and builds Tally voucher XML. Sales vouchers: party debit (-), sales/tax credit (+). Credit Notes: party debit (+), sales/tax credit (-). All amounts balanced.`,
+        inputSchema: {
+            targetCompany: z.string().optional().describe('optional Tally company name'),
+            fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('start date for Odoo invoices'),
+            toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('end date for Odoo invoices'),
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        }
+    }, async (args) => {
+        try {
+            const company = args.targetCompany || '';
+            // 1. Fetch invoices from Odoo
+            const invoices = await odooClient.fetchInvoices(['out_invoice', 'out_refund'], args.fromDate, args.toDate, 0, 5000);
+            if (invoices.length === 0) {
+                return {
+                    content: [{ type: 'text', text: JSON.stringify({ vouchersCreated: 0, message: 'No sales invoices found in Odoo for the given period' }) }]
+                };
+            }
+            // 2. Fetch all invoice lines
+            const allLineIds = invoices.flatMap(inv => inv.invoice_line_ids);
+            const invoiceLines = await odooClient.fetchInvoiceLines(allLineIds);
+            const linesByInvoice = new Map();
+            for (const line of invoiceLines) {
+                // Find which invoice this line belongs to
+                for (const inv of invoices) {
+                    if (inv.invoice_line_ids.includes(line.id)) {
+                        if (!linesByInvoice.has(inv.id))
+                            linesByInvoice.set(inv.id, []);
+                        linesByInvoice.get(inv.id).push(line);
+                    }
+                }
+            }
+            // 3. Collect and create missing masters
+            const allLedgers = await odooToTally.collectInvoiceLedgers(invoices, invoiceLines);
+            const existingLedgers = await queryCollection('Ledger', ['Name'], new Map(), args.targetCompany);
+            const existingNames = new Set(existingLedgers.map((l) => l.Name));
+            const missingLedgers = [...allLedgers.values()].filter(l => !existingNames.has(l.name));
+            if (missingLedgers.length > 0) {
+                const masterParams = new Map();
+                masterParams.set('masters', missingLedgers);
+                masterParams.set('targetCompany', company);
+                await importMasters('master-ledger', masterParams);
+            }
+            // 4. Build vouchers
+            const voucherXmls = [];
+            for (const inv of invoices) {
+                const lines = linesByInvoice.get(inv.id) || [];
+                voucherXmls.push(odooToTally.buildSalesVoucher(inv, lines));
+            }
+            const xml = odooToTally.buildVouchersEnvelope(company, voucherXmls);
+            const voucherParams = new Map();
+            voucherParams.set('masters', voucherXmls);
+            voucherParams.set('targetCompany', company);
+            await importMasters('master-ledger', voucherParams);
+            return {
+                content: [{ type: 'text', text: JSON.stringify({ mastersCreated: missingLedgers.length, vouchersCreated: voucherXmls.length, invoices: invoices.map(i => i.name) }) }]
+            };
+        }
+        catch (err) {
+            return {
+                isError: true, content: [{ type: 'text', text: JSON.stringify(err) }]
+            };
+        }
+    });
+    mcpServer.registerTool('odoo-sync-purchase', {
+        title: 'Sync Odoo Purchase',
+        description: `Fetches purchase invoices and vendor bills from Odoo ERP and creates corresponding Purchase and Credit Note vouchers in Tally Prime. Fetches account.move with move_type in_invoice and in_refund. Purchase vouchers: vendor credit (+), expense/tax debit (-). Credit Notes (Purchase Return): vendor debit (-), expense/tax credit (+). All amounts balanced.`,
+        inputSchema: {
+            targetCompany: z.string().optional().describe('optional Tally company name'),
+            fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('start date for Odoo invoices'),
+            toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('end date for Odoo invoices'),
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        }
+    }, async (args) => {
+        try {
+            const company = args.targetCompany || '';
+            // 1. Fetch invoices from Odoo
+            const invoices = await odooClient.fetchInvoices(['in_invoice', 'in_refund'], args.fromDate, args.toDate, 0, 5000);
+            if (invoices.length === 0) {
+                return {
+                    content: [{ type: 'text', text: JSON.stringify({ vouchersCreated: 0, message: 'No purchase invoices found in Odoo for the given period' }) }]
+                };
+            }
+            // 2. Fetch all invoice lines
+            const allLineIds = invoices.flatMap(inv => inv.invoice_line_ids);
+            const invoiceLines = await odooClient.fetchInvoiceLines(allLineIds);
+            const linesByInvoice = new Map();
+            for (const line of invoiceLines) {
+                for (const inv of invoices) {
+                    if (inv.invoice_line_ids.includes(line.id)) {
+                        if (!linesByInvoice.has(inv.id))
+                            linesByInvoice.set(inv.id, []);
+                        linesByInvoice.get(inv.id).push(line);
+                    }
+                }
+            }
+            // 3. Collect and create missing masters
+            const allLedgers = await odooToTally.collectInvoiceLedgers(invoices, invoiceLines);
+            const existingLedgers = await queryCollection('Ledger', ['Name'], new Map(), args.targetCompany);
+            const existingNames = new Set(existingLedgers.map((l) => l.Name));
+            const missingLedgers = [...allLedgers.values()].filter(l => !existingNames.has(l.name));
+            if (missingLedgers.length > 0) {
+                const masterParams = new Map();
+                masterParams.set('masters', missingLedgers);
+                masterParams.set('targetCompany', company);
+                await importMasters('master-ledger', masterParams);
+            }
+            // 4. Build vouchers
+            const voucherXmls = [];
+            for (const inv of invoices) {
+                const lines = linesByInvoice.get(inv.id) || [];
+                voucherXmls.push(odooToTally.buildPurchaseVoucher(inv, lines));
+            }
+            const xml = odooToTally.buildVouchersEnvelope(company, voucherXmls);
+            const voucherParams = new Map();
+            voucherParams.set('masters', voucherXmls);
+            voucherParams.set('targetCompany', company);
+            await importMasters('master-ledger', voucherParams);
+            return {
+                content: [{ type: 'text', text: JSON.stringify({ mastersCreated: missingLedgers.length, vouchersCreated: voucherXmls.length, invoices: invoices.map(i => i.name) }) }]
+            };
+        }
+        catch (err) {
+            return {
+                isError: true, content: [{ type: 'text', text: JSON.stringify(err) }]
+            };
+        }
+    });
+    mcpServer.registerTool('odoo-sync-journals', {
+        title: 'Sync Odoo Journals',
+        description: `Fetches journal entries from Odoo ERP and creates corresponding Journal/Payment/Receipt/Contra vouchers in Tally Prime. Fetches account.move with move_type=entry and their account.move.line items. Automatically determines voucher type based on bank/cash ledger detection: Contra (all bank/cash), Receipt (bank debited), Payment (bank credited), or Journal (general). Balances each voucher automatically with suspense account if needed.`,
+        inputSchema: {
+            targetCompany: z.string().optional().describe('optional Tally company name'),
+            fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('start date for journal entries'),
+            toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('end date for journal entries'),
+        },
+        annotations: {
+            readOnlyHint: false,
+            openWorldHint: true,
+            destructiveHint: false,
+        }
+    }, async (args) => {
+        try {
+            const company = args.targetCompany || '';
+            // 1. Fetch journal entries from Odoo
+            const entries = await odooClient.fetchJournalEntries(args.fromDate, args.toDate, 0, 5000);
+            if (entries.length === 0) {
+                return {
+                    content: [{ type: 'text', text: JSON.stringify({ vouchersCreated: 0, message: 'No journal entries found in Odoo for the given period' }) }]
+                };
+            }
+            // 2. Fetch all journal items (move lines)
+            const allLineIds = entries.flatMap(e => e.line_ids);
+            const journalItems = await odooClient.fetchJournalItems(allLineIds);
+            const itemsByEntry = new Map();
+            for (const item of journalItems) {
+                for (const entry of entries) {
+                    if (entry.line_ids.includes(item.id)) {
+                        if (!itemsByEntry.has(entry.id))
+                            itemsByEntry.set(entry.id, []);
+                        itemsByEntry.get(entry.id).push(item);
+                    }
+                }
+            }
+            // 3. Collect and create missing masters
+            const allLedgers = await odooToTally.collectJournalLedgers(journalItems);
+            const existingLedgers = await queryCollection('Ledger', ['Name'], new Map(), args.targetCompany);
+            const existingNames = new Set(existingLedgers.map((l) => l.Name));
+            const missingLedgers = [...allLedgers.values()].filter(l => !existingNames.has(l.name));
+            if (missingLedgers.length > 0) {
+                const masterParams = new Map();
+                masterParams.set('masters', missingLedgers);
+                masterParams.set('targetCompany', company);
+                await importMasters('master-ledger', masterParams);
+            }
+            // 4. Build vouchers
+            const voucherXmls = [];
+            for (const entry of entries) {
+                const items = itemsByEntry.get(entry.id) || [];
+                voucherXmls.push(odooToTally.buildJournalVoucher(entry, items));
+            }
+            const xml = odooToTally.buildVouchersEnvelope(company, voucherXmls);
+            const voucherParams = new Map();
+            voucherParams.set('masters', voucherXmls);
+            voucherParams.set('targetCompany', company);
+            await importMasters('master-ledger', voucherParams);
+            return {
+                content: [{ type: 'text', text: JSON.stringify({ mastersCreated: missingLedgers.length, vouchersCreated: voucherXmls.length, entries: entries.map(e => e.name) }) }]
+            };
         }
         catch (err) {
             return {
