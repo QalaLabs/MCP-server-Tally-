@@ -13,7 +13,7 @@ export async function registerMcpServer() {
     const mcpServer = new McpServer({
         name: 'Tally Prime MCP Server',
         title: 'Tally Prime',
-        version: '7.0.0'
+        version: '8.0.0'
     });
     mcpServer.registerTool('metadata-collection', {
         title: 'Metadata Collection',
