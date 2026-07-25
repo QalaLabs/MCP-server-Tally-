@@ -1,0 +1,13 @@
+# Exclude files from Cloud Run source deployment uploads
+.gcloudignore
+.git
+.gitignore
+node_modules/
+.env
+.vscode/
+# Exclude map files and other docs
+dist/*.mjs.map
+Dockerfile.txt
+VOUCHER-LEDGER-MAPPING.md
+README.md
+CLAUDE.md

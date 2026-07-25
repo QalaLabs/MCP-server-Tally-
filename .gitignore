@@ -3,3 +3,5 @@ dist/*.mjs.map
 private/
 .mcpbignore
 *.mcpb
+.env
+Dockerfile.txt

@@ -1,0 +1,6 @@
+node_modules
+.env
+.git
+.vscode
+npm-debug.log
+Dockerfile.txt

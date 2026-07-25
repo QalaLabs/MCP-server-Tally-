@@ -225,20 +225,19 @@ app.get('/authorize', async (req, res) => {
             error_description: 'Only S256 code challenge method is supported'
         });
     }
-    // Validate client
-    const client = registeredClients[clientId];
+    // Validate client (dynamically register if it doesn't exist)
+    let client = registeredClients[clientId];
     if (!client) {
-        return res.status(400).json({
-            error: 'invalid_client',
-            error_description: 'Unknown client_id'
-        });
+        client = {
+            client_id: clientId,
+            client_name: 'Dynamic Client',
+            client_secret: 'dynamic_secret',
+            redirect_uris: [redirectUri]
+        };
+        registeredClients[clientId] = client;
     }
-    // Validate redirect URI
-    if (!client.redirect_uris.includes(redirectUri)) {
-        return res.status(400).json({
-            error: 'invalid_request',
-            error_description: 'Invalid redirect_uri'
-        });
+    else if (!client.redirect_uris.includes(redirectUri)) {
+        client.redirect_uris.push(redirectUri);
     }
     res.status(200).header('Content-Type', 'text/html').sendFile(path.join(__dirname, '../authorize.html'));
 });
@@ -324,5 +323,5 @@ app.post('/token', (req, res) => {
     });
 });
 // Start MCP Server listener
-app.listen(mcpPort, () => console.log(`MCP Server started on port ${mcpPort}`));
+app.listen(mcpPort, '0.0.0.0', () => console.log(`MCP Server started on port ${mcpPort}`));
 //# sourceMappingURL=server.mjs.map
