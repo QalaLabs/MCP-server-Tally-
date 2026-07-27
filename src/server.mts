@@ -411,5 +411,19 @@ app.post('/token', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    service: "Tally MCP Server",
+    message: "Tally MCP Server is running on Google Cloud Run",
+    version: "7.3",
+    endpoints: {
+      metadata: "/.well-known/oauth-protected-resource",
+      mcp: "/mcp",
+      authorize: "/authorize"
+    }
+  });
+});
+
 // Start MCP Server listener
 app.listen(mcpPort, '0.0.0.0', () => console.log(`MCP Server started on port ${mcpPort}`));
