@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import nunjucks from 'nunjucks';
 import { XMLParser } from 'fast-xml-parser';
 import * as m from './models.mjs';
@@ -222,36 +223,41 @@ async function sendTallyXml(xml: string, lstVariables: Map<string, any>): Promis
 async function postTallyXML(xml: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
         try {
+            const tallyUrlStr = process.env.TALLY_URL || `http://localhost:${process.env.TALLY_PORT || '9000'}`;
+            const parsedUrl = new URL(tallyUrlStr);
+            const isHttps = parsedUrl.protocol === 'https:';
+            const clientModule = isHttps ? https : http;
 
-            let req = http.request({
-                hostname: 'localhost',
-                port: tally_port,
-                path: '',
+            const options = {
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (isHttps ? 443 : 80),
+                path: parsedUrl.pathname + parsedUrl.search,
                 method: 'POST',
                 headers: {
                     'Content-Length': Buffer.byteLength(xml, 'utf16le'),
                     'Content-Type': 'text/xml;charset=utf-16'
                 }
-            },
-                (res) => {
-                    let data = '';
-                    res
-                        .setEncoding('utf16le')
-                        .on('data', (chunk) => {
-                            let result = chunk.toString() || '';
-                            data += result;
-                        })
-                        .on('end', () => {
-                            resolve(data);
-                        })
-                        .on('error', (httpErr) => {
-                            reject(httpErr);
-                        });
-                });
+            };
+
+            let req = clientModule.request(options, (res) => {
+                let data = '';
+                res
+                    .setEncoding('utf16le')
+                    .on('data', (chunk) => {
+                        let result = chunk.toString() || '';
+                        data += result;
+                    })
+                    .on('end', () => {
+                        resolve(data);
+                    })
+                    .on('error', (httpErr) => {
+                        reject(httpErr);
+                    });
+            });
             req.on('error', (reqError: NodeJS.ErrnoException) => {
                 let errorType = reqError['message'] || reqError['code'];
                 if (errorType === 'ECONNREFUSED')
-                    reject('Unable to connect to Tally. Ensure Tally is running and XML server is enabled on port ' + tally_port + ' by going to Help (F1) > Settings > Connectivity in Tally and setting Client / Server configuration, set Tally Prime is action as Server');
+                    reject('Unable to connect to Tally. Ensure Tally is running and XML server is enabled on port ' + options.port + ' by going to Help (F1) > Settings > Connectivity in Tally and setting Client / Server configuration, set Tally Prime is action as Server');
                 else
                     reject(reqError);
             });
