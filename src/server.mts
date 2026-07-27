@@ -179,6 +179,7 @@ app.post('/authorize', (req, res) => {
   const redirectUri = req.body['redirect_uri'];
   const codeChallenge = req.body['code_challenge'];
   const codeChallengeMethod = req.body['code_challenge_method'];
+  const state = req.body['state'];
   const password = req.body['password'];
 
   if (!clientId || !password) {
@@ -186,7 +187,7 @@ app.post('/authorize', (req, res) => {
   }
 
   if (password !== authPassword) {
-    return res.status(200).json({ status: false, code: undefined });
+    return res.status(200).json({ status: false });
   }
 
   // Stateless auth code: HMAC-signed payload, self-verifiable on any instance
@@ -198,7 +199,12 @@ app.post('/authorize', (req, res) => {
     expires_at: Date.now() + 600000 // 10 minutes
   });
 
-  res.status(200).json({ status: true, code });
+  // Build the callback URL server-side so state is never lost in client JS
+  const callbackUrl = new URL(redirectUri);
+  callbackUrl.searchParams.set('code', code);
+  if (state) callbackUrl.searchParams.set('state', state);
+
+  res.status(200).json({ status: true, code, redirect_url: callbackUrl.toString() });
 });
 
 app.get('/authorize', async (req, res) => {

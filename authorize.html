@@ -171,6 +171,7 @@
                     redirect_uri: params.redirect_uri,
                     code_challenge: params.codeChallenge,
                     code_challenge_method: params.codeChallengeMethod,
+                    state: params.state,
                     password: password
                 };
 
@@ -191,18 +192,11 @@
                 
                 // Handle response
                 if (result.status === true) {
-                    // Success - redirect with code parameter
-                    const redirectUrl = new URL(params.redirect_uri);
-                    redirectUrl.searchParams.set('code', result.code);
-                    if (params.state) {
-                        redirectUrl.searchParams.set('state', params.state);
-                    }
-                    window.location.href = redirectUrl.toString();
+                    // Server built the redirect URL with code + state — just follow it
+                    window.location.href = result.redirect_url;
                 } else {
-                    // Failure - redirect with error parameter
-                    const redirectUrl = new URL(params.redirect_uri);
-                    redirectUrl.searchParams.set('error', 'access_denied');
-                    window.location.href = redirectUrl.toString();
+                    hideLoading();
+                    showError('Invalid password. Please try again.');
                 }
                 
             } catch (error) {
