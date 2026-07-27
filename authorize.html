@@ -194,7 +194,9 @@
                     // Success - redirect with code parameter
                     const redirectUrl = new URL(params.redirect_uri);
                     redirectUrl.searchParams.set('code', result.code);
-                    redirectUrl.searchParams.set('state', params.state);
+                    if (params.state) {
+                        redirectUrl.searchParams.set('state', params.state);
+                    }
                     window.location.href = redirectUrl.toString();
                 } else {
                     // Failure - redirect with error parameter
