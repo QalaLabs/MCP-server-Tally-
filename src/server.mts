@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv'
@@ -6,10 +7,27 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { registerMcpServer } from './mcp.mjs'
 
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: path.join(packageRoot, '.env'), override: true, quiet: true });
 
 const mcpPort = parseInt(process.env.PORT || '3000');
 const mcpDomain = process.env.MCP_DOMAIN || 'http://localhost:3000';
 const __dirname = import.meta.dirname;
+
+// Host header is hostname[:port], never a full URL — SDK allowedHosts must match that
+const mcpAllowedHosts: string[] = (() => {
+  const hosts = new Set<string>(['localhost', '127.0.0.1']);
+  try {
+    hosts.add(new URL(mcpDomain).host);
+  } catch {
+    hosts.add(mcpDomain);
+  }
+  // Optional comma-separated extra hosts (Cloud Run *.a.run.app alias, custom domains)
+  for (const h of (process.env.ALLOWED_HOSTS || '').split(',').map(s => s.trim()).filter(Boolean)) {
+    hosts.add(h);
+  }
+  return [...hosts];
+})();
 
 const app = express();
 app.use(express.json());
@@ -89,7 +107,8 @@ const handleMcpRequest = async (req: express.Request, res: express.Response) => 
       onsessioninitialized: (sessionId) => {
         transports[sessionId] = transport;
       },
-      allowedHosts: [mcpDomain],
+      // Host header values only (e.g. example.run.app), not https://...
+      allowedHosts: mcpAllowedHosts,
     });
 
     transport.onclose = () => {
@@ -112,6 +131,8 @@ const handleMcpRequest = async (req: express.Request, res: express.Response) => 
   await transport.handleRequest(req, res, req.body);
 };
 
+// Claude posts MCP to connector base URL (/). Also keep /mcp for clients that use resource metadata.
+app.post('/', handleMcpRequest);
 app.post('/mcp', handleMcpRequest);
 
 const handleSessionRequest = async (req: express.Request, res: express.Response) => {
@@ -126,10 +147,12 @@ const handleSessionRequest = async (req: express.Request, res: express.Response)
 
 app.get('/mcp', handleSessionRequest);
 app.delete('/mcp', handleSessionRequest);
+app.delete('/', handleSessionRequest);
 
 const handleOAuthProtectedResource = (req: express.Request, res: express.Response) => {
   res.status(200).json({
-    resource: `${mcpDomain}/mcp`,
+    // Claude connector posts MCP JSON-RPC to the base URL (/)
+    resource: `${mcpDomain}`,
     authorization_servers: [`${mcpDomain}`],
     bearer_methods_supported: ['header'],
     scopes_supported: ['email']
@@ -314,14 +337,19 @@ app.post('/token', (req, res) => {
 });
 
 app.get('/', (req, res) => {
+  // Streamable HTTP session GET (SSE) uses mcp-session-id; bare GET stays a health check
+  if (req.headers['mcp-session-id']) {
+    return handleSessionRequest(req, res);
+  }
   res.status(200).json({
     status: "healthy",
     service: "Tally MCP Server",
     message: "Tally MCP Server is running on Google Cloud Run",
-    version: "8.1",
+    version: "8.2",
     endpoints: {
       metadata: "/.well-known/oauth-protected-resource",
       mcp: "/mcp",
+      mcp_root: "/",
       authorize: "/authorize"
     }
   });

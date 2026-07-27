@@ -4,4 +4,5 @@ private/
 .mcpbignore
 *.mcpb
 .env
+.env.cloudrun.yaml
 Dockerfile.txt

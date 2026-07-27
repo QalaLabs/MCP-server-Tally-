@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
@@ -7,7 +9,9 @@ import { lstCollectionFields, lstOptionCountryState } from './definition.mjs';
 import { utility } from './utility.mjs';
 import * as odooClient from './odoo-client.mjs';
 import * as odooToTally from './odoo-to-tally.mjs';
-dotenv.config({ override: true, quiet: true });
+// Load .env from package root (parent of dist/), not process cwd — Cursor/Claude spawn MCP with a different cwd
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: path.join(packageRoot, '.env'), override: true, quiet: true });
 const lstCollections = lstCollectionFields.map((item) => item.collection);
 export async function registerMcpServer() {
     const mcpServer = new McpServer({
